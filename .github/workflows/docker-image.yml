@@ -9,7 +9,7 @@ on:
 env:
   PROJECT_ID: nifty-harmony-474217-q6
   GAR_LOCATION: us-central1
-  GAR_REPOSITORY: iris-api-repo
+  GAR_REPOSITORY: my-repo
   GKE_CLUSTER: iris-cluster
   GKE_ZONE: us-central1-a
   DEPLOYMENT_NAME: iris-api
