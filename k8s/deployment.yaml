@@ -18,10 +18,10 @@ spec:
       - name: iris-api
         image: us-central1-docker.pkg.dev/nifty-harmony-474217-q6/iris-api-repo/iris-api:latest
         ports:
-        - containerPort: 8000
+        - containerPort: 8200
         env:
         - name: PORT
-          value: "8000"
+          value: "8200"
         resources:
           requests:
             memory: "256Mi"
@@ -41,4 +41,4 @@ spec:
   ports:
   - protocol: TCP
     port: 80
-    targetPort: 8000
+    targetPort: 8200
