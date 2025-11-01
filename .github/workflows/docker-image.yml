@@ -11,7 +11,7 @@ env:
   GAR_LOCATION: us-central1
   GAR_REPOSITORY: my-repo
   GKE_CLUSTER: iris-cluster
-  GKE_ZONE: us-central1-a
+  GKE_LOCATION: us-central1
   DEPLOYMENT_NAME: iris-api
   IMAGE_NAME: iris-api
 
@@ -58,12 +58,11 @@ jobs:
         cache-from: type=gha
         cache-to: type=gha,mode=max
 
-    # Get GKE credentials
     - name: Get GKE Credentials
       uses: google-github-actions/get-gke-credentials@v2
       with:
         cluster_name: ${{ env.GKE_CLUSTER }}
-        location: ${{ env.GKE_ZONE }}
+        location: ${{ env.GKE_LOCATION }}
 
     # Deploy to GKE
     - name: Deploy to GKE
