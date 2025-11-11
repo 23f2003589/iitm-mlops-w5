@@ -1,10 +1,7 @@
-name: Build, Deploy and Stress Test with wrk
+name: Demonstrate Kubernetes Autoscaling (max 3 pods)
 
 on:
-  push:
-    branches: [ "main" ]
-  pull_request:
-    branches: [ "main" ]
+  workflow_dispatch:
 
 env:
   PROJECT_ID: nifty-harmony-474217-q6
@@ -16,7 +13,7 @@ env:
   IMAGE_NAME: iris-api
 
 jobs:
-  build-and-deploy:
+  autoscale-test:
     runs-on: ubuntu-latest
     
     permissions:
@@ -24,72 +21,66 @@ jobs:
       id-token: write
     
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-    
-    - name: Authenticate to Google Cloud
-      uses: google-github-actions/auth@v2
-      with:
-        credentials_json: '${{ secrets.GCP_SA_KEY }}'
-    
-    - name: Set up Cloud SDK
-      uses: google-github-actions/setup-gcloud@v2
-    
-    - name: Configure Docker for Artifact Registry
-      run: gcloud auth configure-docker ${{ env.GAR_LOCATION }}-docker.pkg.dev
-    
-    - name: Set up Docker Buildx
-      uses: docker/setup-buildx-action@v3
-    
-    - name: Build and Push Docker image
-      uses: docker/build-push-action@v5
-      with:
-        context: .
-        file: ./Dockerfile
-        push: true
-        tags: |
-          ${{ env.GAR_LOCATION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.GAR_REPOSITORY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
-          ${{ env.GAR_LOCATION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.GAR_REPOSITORY }}/${{ env.IMAGE_NAME }}:latest
-        cache-from: type=gha
-        cache-to: type=gha,mode=max
-    
-    - name: Get GKE Credentials
-      uses: google-github-actions/get-gke-credentials@v2
-      with:
-        cluster_name: ${{ env.GKE_CLUSTER }}
-        location: ${{ env.GKE_LOCATION }}
-    
-    - name: Deploy to GKE
-      run: |
-        kubectl apply -f k8s/deployment.yaml
-        
-        kubectl set image deployment/$DEPLOYMENT_NAME \
-          $DEPLOYMENT_NAME=$GAR_LOCATION-docker.pkg.dev/$PROJECT_ID/$GAR_REPOSITORY/$IMAGE_NAME:$GITHUB_SHA
-        
-        kubectl rollout status deployment/$DEPLOYMENT_NAME
-        
-        kubectl get services $DEPLOYMENT_NAME-service
-    
-    - name: Install wrk and Run Stress Test
-      run: |
-        sudo apt-get update && sudo apt-get install -y wrk jq
-        
-        echo "Waiting for external IP..."
-        for i in {1..30}; do
-          EXTERNAL_IP=$(kubectl get svc ${DEPLOYMENT_NAME}-service -o json | jq -r '.status.loadBalancer.ingress[0].ip')
-          if [[ "$EXTERNAL_IP" != "null" && "$EXTERNAL_IP" != "" ]]; then
-            echo "Service is live at: $EXTERNAL_IP"
-            break
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: '${{ secrets.GCP_SA_KEY }}'
+      
+      - name: Get GKE Credentials
+        uses: google-github-actions/get-gke-credentials@v2
+        with:
+          cluster_name: ${{ env.GKE_CLUSTER }}
+          location: ${{ env.GKE_LOCATION }}
+      
+      - name: Configure autoscaler (min 1, max 3 pods)
+        run: |
+          kubectl scale deployment/${DEPLOYMENT_NAME} --replicas=1
+          kubectl autoscale deployment ${DEPLOYMENT_NAME} --min=1 --max=3 --cpu-percent=50
+          kubectl get hpa ${DEPLOYMENT_NAME}
+      
+      - name: Wait for Service External IP
+        run: |
+          echo "Waiting for external IP..."
+          for i in {1..30}; do
+            EXTERNAL_IP=$(kubectl get svc ${DEPLOYMENT_NAME}-service -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
+            if [[ -n "$EXTERNAL_IP" ]]; then
+              echo "Found IP: $EXTERNAL_IP"
+              echo "EXTERNAL_IP=$EXTERNAL_IP" >> $GITHUB_ENV
+              break
+            fi
+            sleep 10
+          done
+          if [[ -z "$EXTERNAL_IP" ]]; then
+            echo "No IP found!"
+            exit 1
           fi
-          echo "Still waiting..."
-          sleep 10
-        done
-        
-        cat > test.lua << 'EOF'
-        wrk.method = "POST"
-        wrk.body   = "{\"sepal_length\": 5.1, \"sepal_width\": 3.5, \"petal_length\": 1.4, \"petal_width\": 0.2}"
-        wrk.headers["Content-Type"] = "application/json"
-        EOF
-        
-        echo "Starting wrk stress test..."
-        wrk -t4 -c100 -d30s --latency -s test.lua http://$EXTERNAL_IP:80/predict
+      
+      - name: Install wrk
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential libssl-dev git jq
+          git clone https://github.com/wg/wrk.git
+          cd wrk && make && sudo cp wrk /usr/local/bin && cd ..
+      
+      - name: Create wrk test script
+        run: |
+          cat > test.lua <<'EOF'
+          wrk.method = "POST"
+          wrk.body = '{"sepal_length":5.1,"sepal_width":3.5,"petal_length":1.4,"petal_width":0.2}'
+          wrk.headers["Content-Type"] = "application/json"
+          EOF
+      
+      - name: Run wrk test (1000 concurrent connections)
+        run: |
+          wrk -t8 -c1000 -d30s --latency -s test.lua "http://${EXTERNAL_IP}:80/predict" | tee wrk_autoscale.txt
+          kubectl get hpa
+          kubectl get pods -o wide
+      
+      - name: Upload wrk results
+        uses: actions/upload-artifact@v4
+        with:
+          name: wrk-autoscaling-results
+          path: wrk_autoscale.txt
