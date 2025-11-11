@@ -1,4 +1,4 @@
-name: Build and Deploy to GKE
+name: Build, Deploy and Stress Test with wrk
 
 on:
   push:
@@ -27,25 +27,20 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v4
 
-    # Authenticate to Google Cloud
     - name: Authenticate to Google Cloud
       uses: google-github-actions/auth@v2
       with:
         credentials_json: '${{ secrets.GCP_SA_KEY }}'
 
-    # Set up Cloud SDK
     - name: Set up Cloud SDK
       uses: google-github-actions/setup-gcloud@v2
 
-    # Configure Docker for Artifact Registry
     - name: Configure Docker for Artifact Registry
       run: gcloud auth configure-docker ${{ env.GAR_LOCATION }}-docker.pkg.dev
 
-    # Set up Docker Buildx
     - name: Set up Docker Buildx
       uses: docker/setup-buildx-action@v3
 
-    # Build and Push Docker image
     - name: Build and Push Docker image
       uses: docker/build-push-action@v5
       with:
@@ -64,7 +59,6 @@ jobs:
         cluster_name: ${{ env.GKE_CLUSTER }}
         location: ${{ env.GKE_LOCATION }}
 
-    # Deploy to GKE
     - name: Deploy to GKE
       run: |
         kubectl apply -f k8s/deployment.yaml
@@ -75,3 +69,25 @@ jobs:
         kubectl rollout status deployment/$DEPLOYMENT_NAME
         
         kubectl get services $DEPLOYMENT_NAME-service
+
+    - name: Install wrk and Run Stress Test
+      run: |
+        sudo apt-get update && sudo apt-get install -y wrk jq
+
+        echo "Waiting for external IP..."
+        for i in {1..30}; do
+          EXTERNAL_IP=$(kubectl get svc ${DEPLOYMENT_NAME}-service -o json | jq -r '.status.loadBalancer.ingress[0].ip')
+          if [[ "$EXTERNAL_IP" != "null" && "$EXTERNAL_IP" != "" ]]; then
+            echo "Service is live at: $EXTERNAL_IP"
+            break
+          fi
+          echo "Still waiting..."
+          sleep 10
+        done
+
+        echo 'wrk.method = "POST"
+wrk.body   = "{\"sepal_length\": 5.1, \"sepal_width\": 3.5, \"petal_length\": 1.4, \"petal_width\": 0.2}"
+wrk.headers["Content-Type"] = "application/json"' > test.lua
+
+        echo "Starting wrk stress test..."
+        wrk -t4 -c100 -d30s --latency -s test.lua http://$EXTERNAL_IP:80/predict
