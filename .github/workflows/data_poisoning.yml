@@ -14,7 +14,8 @@ jobs:
           python-version: '3.9'
       - name: Install dependencies
         run: |
-          pip install numpy scikit-learn cml --only-binary=:all:
+          pip install numpy scikit-learn --only-binary=:all:
+          npm install -g @dvcorg/cml
       - name: Run poisoning demo
         run: python poison_demo.py
       - name: Generate report
