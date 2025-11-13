@@ -2,7 +2,7 @@ name: Data Poisoning CML Report
 
 on:
   push:
-    branches: [week-8]
+    branches: [week8]
   pull_request:
     branches: [main]
 
@@ -12,16 +12,12 @@ jobs:
 
     steps:
       - uses: actions/checkout@v3
-      
       - uses: actions/setup-python@v4
         with:
           python-version: '3.9'
-
       - run: pip install scikit-learn joblib numpy cml
-
       - name: Run poisoning demo
         run: python poison_demo.py
-
       - name: Generate and post CML report
         env:
           REPO_TOKEN: ${{ secrets.GITHUB_TOKEN }}
