@@ -73,4 +73,4 @@ def compare_models(poison_percent=0.05):
         accuracy_drop = original_accuracy - poisoned_accuracy
         print(f"Accuracy Drop: {accuracy_drop:.4f} ({accuracy_drop*100:.2f}%)")
 
-compare_models(poison_percent=0.05)
+compare_models(poison_percent=0.1)
