@@ -4,6 +4,12 @@ on:
     branches: [week8]
   pull_request:
     branches: [main]
+
+permissions:
+  contents: read
+  pull-requests: write
+  issues: write
+
 jobs:
   poison-experiment:
     runs-on: ubuntu-latest
