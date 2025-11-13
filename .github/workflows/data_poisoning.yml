@@ -15,9 +15,16 @@ jobs:
       - uses: actions/setup-python@v4
         with:
           python-version: '3.9'
-      - run: pip install scikit-learn joblib numpy cml
+
+      - name: Install dependencies
+        run: |
+          pip install --upgrade pip setuptools wheel
+          pip install -U numpy==1.23.5 joblib cml
+          pip install scikit-learn==1.2.2 --only-binary=:all:
+
       - name: Run poisoning demo
         run: python poison_demo.py
+
       - name: Generate and post CML report
         env:
           REPO_TOKEN: ${{ secrets.GITHUB_TOKEN }}
