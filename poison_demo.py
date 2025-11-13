@@ -8,7 +8,7 @@ import json
 import argparse
 
 def load_original_model():
-    model = joblib.load('iitm-mlops-w5/model.joblib')
+    model = joblib.load('model.joblib')
     
 def poison_data(X, y, poison_percent=0.05):
     n_samples = len(X)
