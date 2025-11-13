@@ -1,37 +1,34 @@
 name: Data Poisoning CML Report
-
 on:
   push:
     branches: [week8]
   pull_request:
     branches: [main]
-
 jobs:
   poison-experiment:
     runs-on: ubuntu-latest
-
     steps:
       - uses: actions/checkout@v3
       - uses: actions/setup-python@v4
         with:
           python-version: '3.9'
-      - run: |
-            pip install --upgrade pip setuptools wheel
-            pip install -U numpy==1.23.5 joblib cml
-            pip install scikit-learn==1.2.2 --only-binary=:all:
+      - name: Install dependencies
+        run: |
+          pip install numpy scikit-learn cml
       - name: Run poisoning demo
         run: python poison_demo.py
-      - name: Generate and post CML report
-        env:
-          REPO_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Generate report
         run: |
-          python - <<'PYCODE'
+          python -c "
           import json
           d = json.load(open('metrics.json'))
           with open('report.md', 'w') as f:
-              f.write(f"### Data Poisoning Report\n\n")
-              f.write(f"- Poison Percent: {d['poison_percent']*100:.1f}%\n")
-              f.write(f"- Accuracy: {d['accuracy']:.4f}\n")
-              f.write(f"- Poisoned Samples: {d['n_poisoned_samples']}\n")
-          PYCODE
-          cml comment create report.md
+              f.write('### Data Poisoning Report\n\n')
+              f.write(f'- Poison Percent: {d[\"poison_percent\"]*100:.1f}%\n')
+              f.write(f'- Accuracy: {d[\"accuracy\"]:.4f}\n')
+              f.write(f'- Poisoned Samples: {d[\"n_poisoned_samples\"]}\n')
+          "
+      - name: Post CML report
+        env:
+          REPO_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: cml comment create report.md
