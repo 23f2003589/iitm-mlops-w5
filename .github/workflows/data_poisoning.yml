@@ -35,7 +35,3 @@ jobs:
               f.write(f'- Accuracy: {d[\"accuracy\"]:.4f}\n')
               f.write(f'- Poisoned Samples: {d[\"n_poisoned_samples\"]}\n')
           "
-      - name: Post CML report
-        env:
-          REPO_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: cml comment create report.md
